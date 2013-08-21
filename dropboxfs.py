@@ -111,6 +111,57 @@ class SpooledReader(ContextManagerStream):
         return self.bytes
 
 
+class ChunkedReader(ContextManagerStream):
+    """ A file-like that provides access to a file with dropbox API"""
+    """Reads the file from the remote server as requested.
+    It can then satisfy read(), readline()."""
+
+    def __init__(self, client, name, max_buffer=MAX_BUFFER):
+        self.next_chunk = ""
+        self.client = client
+        self.r = self.client.get_file(name)
+        self.bytes = int(self.r.getheader('Content-Length'))
+        temp = StringIO()
+        self.iterator = iter(self)
+        self.leftover = ''
+        super(ChunkedReader, self).__init__(temp, name)
+
+    def next(self):
+        return self.iterator.next()
+
+    def readline(self):
+        return self.next()
+
+    def read(self, size=16384):
+        data = self.leftover
+        count = len(self.leftover)
+        try:
+            while count < size:
+                chunk = self.next()
+                data += chunk
+                count += len(chunk)
+        except StopIteration, e:
+            self.leftover = ''
+            return data
+
+        if count > size:
+            self.leftover = data[size:]
+
+        return data[:size]
+
+    def __iter__(self):
+        print 'iter'
+        while True:
+            data = self.r.read(16384) #read chunks
+            print 'data ' + data
+            if not data:
+                break
+            yield data #yield chunks as response
+
+    def __len__(self):
+        return self.bytes
+
+
 class CacheItem(object):
     """Represents a path in the cache. There are two components to a path.
     It's individual metadata, and the children contained within it."""
@@ -362,7 +413,7 @@ class DropboxFS(FS):
     @synchronize
     def open(self, path, mode="rb", **kwargs):
         if 'r' in mode:
-            return SpooledReader(self.client, path)
+            return ChunkedReader(self.client, path)
         else:
             return SpooledWriter(self.client, path)
 
