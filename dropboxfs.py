@@ -115,51 +115,29 @@ class ChunkedReader(ContextManagerStream):
     """ A file-like that provides access to a file with dropbox API"""
     """Reads the file from the remote server as requested.
     It can then satisfy read(), readline()."""
-
-    def __init__(self, client, name, max_buffer=MAX_BUFFER):
-        self.next_chunk = ""
+    def __init__(self, client, name):
         self.client = client
         self.r = self.client.get_file(name)
-        self.bytes = int(self.r.getheader('Content-Length'))
-        temp = StringIO()
-        self.iterator = iter(self)
-        self.leftover = ''
-        super(ChunkedReader, self).__init__(temp, name)
-
-    def next(self):
-        return self.iterator.next()
-
-    def readline(self):
-        return self.next()
-
-    def read(self, size=16384):
-        data = self.leftover
-        count = len(self.leftover)
-        try:
-            while count < size:
-                chunk = self.next()
-                data += chunk
-                count += len(chunk)
-        except StopIteration, e:
-            self.leftover = ''
-            return data
-
-        if count > size:
-            self.leftover = data[size:]
-
-        return data[:size]
-
-    def __iter__(self):
-        print 'iter'
-        while True:
-            data = self.r.read(16384) #read chunks
-            print 'data ' + data
-            if not data:
-                break
-            yield data #yield chunks as response
+        self.bytes = int(self.r.getheader('Content-Length')) 
+        self.name = name
 
     def __len__(self):
         return self.bytes
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        data = self.read()
+        if data is None:
+            raise StopIteration()
+        return data
+
+    def read(self, size=16384):
+        return self.r.read(size)
+
+    def readline(self):
+        raise NotImplementedError()
 
 
 class CacheItem(object):
