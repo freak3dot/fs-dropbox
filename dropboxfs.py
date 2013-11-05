@@ -80,7 +80,10 @@ class SpooledWriter(ContextManagerStream):
             self.temp.seek(0)
             shutil.copyfileobj(self.temp, temp)
             self.temp = temp
-        self.temp.write(data)
+        try:
+            self.temp.write(data)
+        except rest.ErrorResponse, e:
+            raise RemoteConnectionError(opname='write', path=name)
         self.bytes += len(data)
 
     def close(self):
@@ -97,7 +100,10 @@ class SpooledReader(ContextManagerStream):
     It can then satisfy read(), seek() and other calls using the local file."""
     def __init__(self, client, name, max_buffer=MAX_BUFFER):
         self.client = client
-        r = self.client.get_file(name)
+        try:
+            r = self.client.get_file(name)
+        except rest.ErrorResponse, e:
+            raise RemoteConnectionError(opname='get_file', path=name)
         self.bytes = int(r.getheader('Content-Length'))
         if r > max_buffer:
             temp = tempfile.TemporaryFile()
@@ -117,7 +123,10 @@ class ChunkedReader(ContextManagerStream):
     It can then satisfy read(), readline()."""
     def __init__(self, client, name):
         self.client = client
-        self.r = self.client.get_file(name)
+        try:
+            self.r = self.client.get_file(name)
+        except rest.ErrorResponse, e:
+            raise RemoteConnectionError(opname='get_file', path=name)
         self.bytes = int(self.r.getheader('Content-Length')) 
         self.name = name
 
